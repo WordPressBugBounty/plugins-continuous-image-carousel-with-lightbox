@@ -3,9 +3,9 @@ Contributors:nik00726
 Donate link:http://www.i13websolution.com/donate-wordpress_image_thumbnail.php
 Tags:wordpress continuous slider lightbox,wordpress responsive continuous slider,wordpress ticker slider,wordpress continuous carousel,wordpress continuously slider,wordpress uninterrupted slider
 Requires at least:3.5
-Tested up to:6.6
-Version:1.0.18
-Stable tag:1.0.18
+Tested up to:6.8
+Version:1.0.19
+Stable tag:1.0.19
 License:GPLv2 or later
 License URI:http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -127,6 +127,12 @@ This plugin is free for everyone! Since it's released under the GPL, you can use
 
 
 == Changelog ==
+
+= 1.0.19 =
+
+* Added webp image support
+* Tested with WordPress 6.8
+
 
 = 1.0.18 =
 

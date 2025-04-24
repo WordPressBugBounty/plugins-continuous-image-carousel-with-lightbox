@@ -5,7 +5,7 @@
     Author URI:https://www.i13websolution.com
     Description:Continuous Image Carousel With Lightbox is beautiful responsive continuous thumbnail image slider with responsive lightbox.Add any number of images from admin panel.
     Author:I Thirteen Web Solution
-    Version:1.0.18
+    Version:1.0.19
     Text Domain:continuous-image-carousel-with-lightbox
     Domain Path: /languages
     */
@@ -248,7 +248,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
             wp_register_style( 'images-continuous-thumbnail-slider-plus-lighbox-style', plugins_url('/css/images-continuous-thumbnail-slider-plus-lighbox-style.css', __FILE__),array(),'1.0.10' );
             wp_register_style( 'continuous-l-box-css', plugins_url('/css/continuous-l-box-css.css', __FILE__),array(),'1.0.10' );
             wp_register_script('images-continuous-thumbnail-slider-plus-lightbox-jc',plugins_url('/js/images-continuous-thumbnail-slider-plus-lightbox-jc.js', __FILE__),array('jquery'),'1.0.13');
-            wp_register_script('continuous-l-box-js',plugins_url('/js/continuous-l-box-js.js', __FILE__),array('jquery'),'1.0.12');
+            wp_register_script('continuous-l-box-js',plugins_url('/js/continuous-l-box-js.js', __FILE__),array('jquery'),'1.0.19');
 
           
 
@@ -1137,6 +1137,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                                                 validExtensions[1]='jpeg';
                                                 validExtensions[2]='png';
                                                 validExtensions[3]='gif';
+                                                validExtensions[4]='webp';
 
 
                                                 var inarr=parseInt(jQuery.inArray( attachment.subtype, validExtensions));
@@ -1552,6 +1553,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                                                                         validExtensions[1]='jpeg';
                                                                         validExtensions[2]='png';
                                                                         validExtensions[3]='gif';
+                                                                        validExtensions[4]='webp';
                                                                       
 
                                                                         var inarr=parseInt(jQuery.inArray( attachment.subtype, validExtensions));
