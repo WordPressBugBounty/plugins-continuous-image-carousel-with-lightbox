@@ -5,11 +5,10 @@
     Author URI:https://www.i13websolution.com
     Description:Continuous Image Carousel With Lightbox is beautiful responsive continuous thumbnail image slider with responsive lightbox.Add any number of images from admin panel.
     Author:I Thirteen Web Solution
-    Version:1.0.19
+    Version:1.0.20
     Text Domain:continuous-image-carousel-with-lightbox
     Domain Path: /languages
     */
-    //error_reporting(0);
     add_filter('widget_text', 'do_shortcode');
     add_action('admin_menu', 'continuous_slider_plus_lightbox_add_admin_menu');
     //add_action( 'admin_init', 'continuous_slider_plus_lightbox_plugin_admin_init' );
@@ -463,8 +462,8 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                         }  
 
 
-                        if(trim($type)=='err'){ echo "<div class='notice notice-error is-dismissible'><p>"; echo $message; echo "</p></div>";}
-                        else if(trim($type)=='succ'){ echo "<div class='notice notice-success is-dismissible'><p>"; echo $message; echo "</p></div>";}
+                        if(trim($type)=='err'){ echo "<div class='notice notice-error is-dismissible'><p>"; echo esc_html($message); echo "</p></div>";}
+                        else if(trim($type)=='succ'){ echo "<div class='notice notice-success is-dismissible'><p>"; echo esc_html($message); echo "</p></div>";}
        
 
                         update_option('continuous_thumbnail_slider_plus_lightbox_messages', array());     
@@ -805,8 +804,8 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                     }  
 
 
-                   if(trim($type)=='err'){ echo "<div class='notice notice-error is-dismissible'><p>"; echo $message; echo "</p></div>";}
-                   else if(trim($type)=='succ'){ echo "<div class='notice notice-success is-dismissible'><p>"; echo $message; echo "</p></div>";}
+                   if(trim($type)=='err'){ echo "<div class='notice notice-error is-dismissible'><p>"; echo esc_html($message); echo "</p></div>";}
+                   else if(trim($type)=='succ'){ echo "<div class='notice notice-success is-dismissible'><p>"; echo esc_html($message); echo "</p></div>";}
        
 
                     update_option('continuous_thumbnail_slider_plus_lightbox_messages', array());   
@@ -897,8 +896,9 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                             $query = "SELECT * FROM " . $wpdb->prefix . "continuous_image_carousel ";
                             $queryCount = "SELECT count(*) FROM " . $wpdb->prefix . "continuous_image_carousel ";
                             if($search_term!=''){
-                               $query.=" where id like '%$search_term%' or title like '%$search_term%' "; 
-                               $queryCount.=" where id like '%$search_term%' or title like '%$search_term%' "; 
+                               $like_term = '%' . $wpdb->esc_like($search_term) . '%';
+                               $query = $wpdb->prepare("SELECT * FROM ".$wpdb->prefix."continuous_image_carousel WHERE id LIKE %s OR title LIKE %s", $like_term, $like_term);
+                               $queryCount = $wpdb->prepare("SELECT count(*) FROM ".$wpdb->prefix."continuous_image_carousel WHERE id LIKE %s OR title LIKE %s", $like_term, $like_term);
                             }
 
                             $order_by=sanitize_text_field(sanitize_sql_orderby($order_by));
@@ -1314,14 +1314,18 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                     try{
                         if($imagename!=""){
-                            $query = "update ".$wpdb->prefix."continuous_image_carousel set title='$title',image_name='$imagename',
-                            custom_link='$imageurl' where id=$imageid";
+                            $query = $wpdb->prepare(
+                                "UPDATE ".$wpdb->prefix."continuous_image_carousel SET title=%s, image_name=%s, custom_link=%s WHERE id=%d",
+                                $title, $imagename, $imageurl, $imageid
+                            );
                         }
                         else{
-                            $query = "update ".$wpdb->prefix."continuous_image_carousel set title='$title',
-                            custom_link='$imageurl' where id=$imageid";
+                            $query = $wpdb->prepare(
+                                "UPDATE ".$wpdb->prefix."continuous_image_carousel SET title=%s, custom_link=%s WHERE id=%d",
+                                $title, $imageurl, $imageid
+                            );
                         } 
-                        $wpdb->query($query); 
+                        $wpdb->query($query);
 
                         $continuous_thumbnail_slider_plus_lightbox_messages=array();
                         $continuous_thumbnail_slider_plus_lightbox_messages['type']='succ';
@@ -1406,9 +1410,10 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                                 } 
 
-                              $query = "INSERT INTO ".$wpdb->prefix."continuous_image_carousel (title, image_name,createdon,custom_link) 
-                              VALUES ('$title','$imagename','$createdOn','$imageurl')";
-
+                              $query = $wpdb->prepare(
+                                  "INSERT INTO ".$wpdb->prefix."continuous_image_carousel (title, image_name, createdon, custom_link) VALUES (%s, %s, %s, %s)",
+                                  $title, $imagename, $createdOn, $imageurl
+                              );
 
                             $wpdb->query($query); 
 
@@ -1501,7 +1506,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                     <div id="poststuff">
                         <div id="post-body" class="metabox-holder columns-2">
                             <div id="post-body-content">
-                                <form method="post" action="" id="addimage" name="addimage" enctype="multipart/form-data" >
+                                <form method="post" action="" id="addimage" name="addimage" >
 
                                      <div class="stuffbox" id="namediv" style="width:100%">
                                         <h3><label for="link_name"><?php echo __('Upload Image','continuous-image-carousel-with-lightbox');?></label></h3>
@@ -1769,7 +1774,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
             try{
 
 
-                $query="SELECT * FROM ".$wpdb->prefix."continuous_image_carousel WHERE id=$deleteId";
+                $query=$wpdb->prepare("SELECT * FROM ".$wpdb->prefix."continuous_image_carousel WHERE id=%d", $deleteId);
                 $myrow  = $wpdb->get_row($query);
 
                 if(is_object($myrow)){
@@ -1781,7 +1786,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                     $imagetoDel=$pathToImagesFolder.'/'.$image_name;
                     @unlink($imagetoDel);
 
-                    $query = "delete from  ".$wpdb->prefix."continuous_image_carousel where id=$deleteId";
+                    $query = $wpdb->prepare("DELETE FROM ".$wpdb->prefix."continuous_image_carousel WHERE id=%d", $deleteId);
                     $wpdb->query($query); 
 
                     $continuous_thumbnail_slider_plus_lightbox_messages=array();
@@ -1841,7 +1846,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                         foreach($deleteto as $img){ 
 
                             $img=intval($img);
-                            $query="SELECT * FROM ".$wpdb->prefix."continuous_image_carousel WHERE id=$img";
+                            $query=$wpdb->prepare("SELECT * FROM ".$wpdb->prefix."continuous_image_carousel WHERE id=%d", $img);
                             $myrow  = $wpdb->get_row($query);
 
                             if(is_object($myrow)){
@@ -1852,7 +1857,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                               
                                 $imagetoDel=$pathToImagesFolder.'/'.$image_name;
                                 @unlink($imagetoDel);
-                                $query = "delete from  ".$wpdb->prefix."continuous_image_carousel where id=$img";
+                                $query = $wpdb->prepare("DELETE FROM ".$wpdb->prefix."continuous_image_carousel WHERE id=%d", $img);
                                 $wpdb->query($query); 
 
                                 $continuous_thumbnail_slider_plus_lightbox_messages=array();
@@ -2726,8 +2731,10 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
           
           
          
-          $query = "INSERT INTO ".$wpdb->prefix."continuous_image_carousel (title, image_name,createdon) 
-                    VALUES ('$title','$imagename','$createdOn')";
+          $query = $wpdb->prepare(
+              "INSERT INTO ".$wpdb->prefix."continuous_image_carousel (title, image_name, createdon) VALUES (%s, %s, %s)",
+              $title, $imagename, $createdOn
+          );
 
           $wpdb->query($query);
 

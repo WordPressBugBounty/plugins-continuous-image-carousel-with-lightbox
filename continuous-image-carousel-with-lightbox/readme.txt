@@ -4,8 +4,8 @@ Donate link:http://www.i13websolution.com/donate-wordpress_image_thumbnail.php
 Tags:wordpress continuous slider lightbox,wordpress responsive continuous slider,wordpress ticker slider,wordpress continuous carousel,wordpress continuously slider,wordpress uninterrupted slider
 Requires at least:3.5
 Tested up to:7.0
-Version:1.0.19
-Stable tag:1.0.19
+Version:1.0.20
+Stable tag:1.0.20
 License:GPLv2 or later
 License URI:http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -127,6 +127,12 @@ This plugin is free for everyone! Since it's released under the GPL, you can use
 
 
 == Changelog ==
+
+= 1.0.20 =
+
+* Security fixes -- php.error.echo.reporting.multipart.form.copy
+
+
 
 = 1.0.19 =
 
