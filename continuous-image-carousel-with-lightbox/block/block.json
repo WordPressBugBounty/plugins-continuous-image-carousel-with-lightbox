@@ -1,0 +1,16 @@
+{
+    "$schema": "https://schemas.wp.org/trunk/block.json",
+    "apiVersion": 3,
+    "name": "cicwl/continuous-carousel",
+    "title": "Continuous Image Carousel",
+    "category": "media",
+    "icon": "images-alt2",
+    "description": "Your continuous scrolling image carousel with lightbox, wherever you place this block.",
+    "keywords": ["carousel", "slider", "gallery", "lightbox", "continuous", "image"],
+    "textdomain": "continuous-image-carousel-with-lightbox",
+    "supports": {
+        "html": false,
+        "align": ["wide", "full"],
+        "customClassName": true
+    }
+}

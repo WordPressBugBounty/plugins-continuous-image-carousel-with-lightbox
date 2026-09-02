@@ -1,11 +1,11 @@
 <?php
      /* 
-    Plugin Name: Continuous Image Carousel With Lightbox
+    Plugin Name: Image Ticker & Logo Slider – Continuous Auto-Scroll Carousel with Lightbox
     Plugin URI:https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/
     Author URI:https://www.i13websolution.com
-    Description:Continuous Image Carousel With Lightbox is beautiful responsive continuous thumbnail image slider with responsive lightbox.Add any number of images from admin panel.
+    Description:An auto-scrolling image ticker & logo slider for WordPress with a responsive lightbox. Choose a dependency-free "Modern" engine (no jQuery) or the original engine, and add it via shortcode or the native Gutenberg block.
     Author:I Thirteen Web Solution
-    Version:1.0.20
+    Version:2.0
     Text Domain:continuous-image-carousel-with-lightbox
     Domain Path: /languages
     */
@@ -17,9 +17,74 @@
     add_action('wp_enqueue_scripts', 'continuous_slider_plus_lightbox_load_styles_and_js');
     add_shortcode( 'print_continuous_slider_plus_lightbox', 'print_continuous_slider_plus_lightbox_func' );
     add_action('admin_notices', 'continuous_slider_plus_lightbox_admin_notices');
+    add_action('admin_notices', 'cicwl_review_notice');
+    add_action('admin_init', 'cicwl_handle_review_dismiss');
+    add_action('admin_enqueue_scripts', 'cicwl_enqueue_deactivate_survey');
+    add_action('wp_ajax_cicwl_deactivate_feedback', 'cicwl_handle_deactivate_feedback');
     add_action('plugins_loaded', 'cicwl_lang_for_wp_continuous_slider_with_lightbox');
     add_filter( 'user_has_cap', 'cicwl_continuous_slider_plus_lightbox_admin_cap_list' , 10, 4 );
     add_action( 'wp_ajax_mass_upload_wrthsliderlboxcont', 'wrthslider_slider_mass_upload_wrthsliderlboxcont' );
+    add_action( 'init', 'cicwl_register_gutenberg_block' );
+
+    // Static "1.0.0" version strings mean the browser (and any caching
+    // plugin/CDN) has no way to know an asset changed, so it can keep
+    // serving a stale cached copy indefinitely. filemtime() ties the
+    // version to the file's actual last-modified time, so every real edit
+    // automatically busts the cache without anyone needing to remember to
+    // bump a number by hand.
+    function cicwl_mtime_ver( $relative_path ){
+
+        $abs = plugin_dir_path( __FILE__ ) . ltrim( $relative_path, '/' );
+        return file_exists( $abs ) ? filemtime( $abs ) : '1.0.0';
+
+    }
+
+    function cicwl_register_gutenberg_block(){
+
+        // register_block_type() didn't exist before WordPress 5.0. Without
+        // this guard, a site running an older WP version (which this
+        // plugin's stated minimum of 3.5 technically still allows) would
+        // hit a fatal "call to undefined function" error on every page load.
+        if ( ! function_exists( 'register_block_type' ) ) {
+            return;
+        }
+
+        wp_register_script(
+            'cicwl-block-editor-js',
+            plugins_url( '/block/index.js', __FILE__ ),
+            array( 'wp-blocks', 'wp-element', 'wp-block-editor', 'wp-components', 'wp-server-side-render', 'wp-i18n', 'wp-data' ),
+            cicwl_mtime_ver('block/index.js'),
+            true
+        );
+
+        wp_localize_script( 'cicwl-block-editor-js', 'cicwlBlockData', array(
+            'settingsUrl' => admin_url( 'admin.php?page=continuous_thumbnail_slider_with_lightbox' ),
+            'proUrl'      => 'https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/',
+        ) );
+
+        wp_register_style(
+            'cicwl-block-editor-css',
+            plugins_url( '/block/editor.css', __FILE__ ),
+            array(),
+            cicwl_mtime_ver('block/editor.css')
+        );
+
+        register_block_type( __DIR__ . '/block', array(
+            'editor_script'   => 'cicwl-block-editor-js',
+            'editor_style'    => 'cicwl-block-editor-css',
+            'render_callback' => 'cicwl_render_gutenberg_block',
+        ) );
+
+    }
+
+    // Same render path as the shortcode — block, shortcode, and the admin
+    // "Preview Slider" page can never show different output or a different
+    // engine from one another.
+    function cicwl_render_gutenberg_block( $attributes ){
+
+        return print_continuous_slider_plus_lightbox_func( array() );
+
+    }
     
     function cicwl_lang_for_wp_continuous_slider_with_lightbox() {
       
@@ -208,6 +273,148 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
     
 }
 
+    // A quiet, easy-to-dismiss nudge toward a WordPress.org review — shown
+    // only on this plugin's own admin pages, only to someone who can already
+    // manage its settings, and only once the plugin has had a full week to
+    // prove itself. "No thanks" hides it permanently (no repeated nagging).
+    function cicwl_review_notice(){
+
+        if ( ! current_user_can('cicwl_continuous_slider_settings') ) {
+            return;
+        }
+
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if ( ! $screen || strpos( $screen->id, 'continuous_thumbnail_slider_with_lightbox' ) === false ) {
+            return;
+        }
+
+        if ( get_option('cicwl_review_notice_dismissed') ) {
+            return;
+        }
+
+        $activated = get_option('cicwl_activation_time');
+        if ( ! $activated ) {
+            // Sites that already had the plugin active before this update
+            // never ran the activation hook that sets this — start the
+            // one-week grace period now instead of showing the notice
+            // immediately on their next admin page load.
+            update_option('cicwl_activation_time', time());
+            return;
+        }
+
+        if ( ( time() - (int) $activated ) < 7 * DAY_IN_SECONDS ) {
+            return;
+        }
+
+        $dismiss_url = wp_nonce_url( add_query_arg('cicwl_dismiss_review', '1'), 'cicwl_dismiss_review', 'cicwl_review_nonce' );
+        ?>
+        <div class="notice notice-info cicwl-review-notice">
+            <p>
+                <strong><?php echo __('Enjoying Continuous Image Carousel With Lightbox?','continuous-image-carousel-with-lightbox');?></strong><br>
+                <?php echo __('If it\'s working well for you, a quick 5-star review helps other people find the plugin — it only takes a minute.','continuous-image-carousel-with-lightbox');?>
+            </p>
+            <p>
+                <a href="https://wordpress.org/support/plugin/continuous-image-carousel-with-lightbox/reviews/?rate=5#new-post" target="_blank" rel="noopener noreferrer" class="button button-primary"><?php echo __('★★★★★ Leave a Review','continuous-image-carousel-with-lightbox');?></a>
+                &nbsp;
+                <a href="<?php echo esc_url($dismiss_url);?>"><?php echo __('No thanks','continuous-image-carousel-with-lightbox');?></a>
+            </p>
+        </div>
+        <?php
+    }
+
+    function cicwl_handle_review_dismiss(){
+
+        if ( isset($_GET['cicwl_dismiss_review']) && isset($_GET['cicwl_review_nonce']) && wp_verify_nonce( sanitize_text_field($_GET['cicwl_review_nonce']), 'cicwl_dismiss_review' ) ) {
+
+            update_option('cicwl_review_notice_dismissed', 1);
+            wp_safe_redirect( remove_query_arg( array('cicwl_dismiss_review','cicwl_review_nonce') ) );
+            exit;
+
+        }
+
+    }
+
+    // A short "why are you leaving?" modal shown when someone clicks
+    // Deactivate on the Plugins list — catches feedback (and, if the reason
+    // is a missing feature, a Pro pitch) at the exact moment someone's about
+    // to churn, rather than hoping they come back on their own.
+    function cicwl_enqueue_deactivate_survey($hook){
+
+        if ( $hook !== 'plugins.php' ) {
+            return;
+        }
+
+        if ( ! current_user_can('cicwl_continuous_slider_settings') ) {
+            return;
+        }
+
+        wp_register_script(
+            'cicwl-deactivate-survey',
+            plugins_url( '/js/deactivate-survey.js', __FILE__ ),
+            array(),
+            '1.0.0',
+            true
+        );
+
+        wp_register_style(
+            'cicwl-deactivate-survey-css',
+            plugins_url( '/css/deactivate-survey.css', __FILE__ ),
+            array(),
+            '1.0.0'
+        );
+
+        wp_localize_script( 'cicwl-deactivate-survey', 'cicwlDeactivateSurvey', array(
+            'pluginBasename' => plugin_basename( __FILE__ ),
+            'proUrl'         => 'https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/',
+            'ajaxUrl'        => admin_url( 'admin-ajax.php' ),
+            'nonce'          => wp_create_nonce( 'cicwl_deactivate_feedback' ),
+            'strings'        => array(
+                'title'           => __( 'Quick question before you go', 'continuous-image-carousel-with-lightbox' ),
+                'subtitle'        => __( 'Mind telling us why you\u2019re deactivating? This helps us improve the plugin.', 'continuous-image-carousel-with-lightbox' ),
+                'reasons'         => array(
+                    'missing_feature' => __( 'It\u2019s missing a feature I need', 'continuous-image-carousel-with-lightbox' ),
+                    'found_bug'       => __( 'I found a bug', 'continuous-image-carousel-with-lightbox' ),
+                    'switching'       => __( 'I\u2019m switching to a different plugin', 'continuous-image-carousel-with-lightbox' ),
+                    'temporary'       => __( 'It\u2019s temporary \u2014 just testing', 'continuous-image-carousel-with-lightbox' ),
+                    'other'           => __( 'Other', 'continuous-image-carousel-with-lightbox' ),
+                ),
+                'proPitchTitle'   => __( 'Before you go \u2014 Pro might already have it', 'continuous-image-carousel-with-lightbox' ),
+                'proPitchBody'    => __( 'Unlimited sliders, bulk image upload, crop/border/shadow styling, random order, and lightbox caption options are all in Pro.', 'continuous-image-carousel-with-lightbox' ),
+                'proPitchButton'  => __( 'See Pro Features', 'continuous-image-carousel-with-lightbox' ),
+                'skipAndDeactivate' => __( 'Skip & Deactivate', 'continuous-image-carousel-with-lightbox' ),
+                'submitAndDeactivate' => __( 'Submit & Deactivate', 'continuous-image-carousel-with-lightbox' ),
+                'cancel'          => __( 'Cancel', 'continuous-image-carousel-with-lightbox' ),
+            ),
+        ) );
+
+        wp_enqueue_script('cicwl-deactivate-survey');
+        wp_enqueue_style('cicwl-deactivate-survey-css');
+
+    }
+
+    function cicwl_handle_deactivate_feedback(){
+
+        check_ajax_referer( 'cicwl_deactivate_feedback', 'nonce' );
+
+        if ( ! current_user_can('cicwl_continuous_slider_settings') ) {
+            wp_send_json_error();
+        }
+
+        $reason = isset($_POST['reason']) ? sanitize_text_field($_POST['reason']) : 'other';
+        $counts = get_option('cicwl_deactivate_feedback_counts', array());
+        if ( ! is_array($counts) ) {
+            $counts = array();
+        }
+        if ( ! isset($counts[$reason]) ) {
+            $counts[$reason] = 0;
+        }
+        $counts[$reason]++;
+        update_option('cicwl_deactivate_feedback_counts', $counts);
+
+        wp_send_json_success();
+
+    }
+
     function continuous_slider_plus_lightbox_admin_notices() {
         
         if (is_plugin_active('continuous-image-carousel-with-lightbox/continuous-image-carousel-with-lightbox.php')) {
@@ -243,18 +450,32 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
         
         if (!is_admin()) {                                                       
 
-
+            // Legacy engine assets (bxSlider ticker mode) — untouched, still
+            // registered so upgraded sites keep exactly the same behaviour.
             wp_register_style( 'images-continuous-thumbnail-slider-plus-lighbox-style', plugins_url('/css/images-continuous-thumbnail-slider-plus-lighbox-style.css', __FILE__),array(),'1.0.10' );
-            wp_register_style( 'continuous-l-box-css', plugins_url('/css/continuous-l-box-css.css', __FILE__),array(),'1.0.10' );
             wp_register_script('images-continuous-thumbnail-slider-plus-lightbox-jc',plugins_url('/js/images-continuous-thumbnail-slider-plus-lightbox-jc.js', __FILE__),array('jquery'),'1.0.13');
+
+            // Legacy lightbox (FancyBox 1.3.6 fork) — untouched.
+            wp_register_style( 'continuous-l-box-css', plugins_url('/css/continuous-l-box-css.css', __FILE__),array(),'1.0.10' );
             wp_register_script('continuous-l-box-js',plugins_url('/js/continuous-l-box-js.js', __FILE__),array('jquery'),'1.0.19');
 
-          
+            // Modern engine — no jQuery dependency, CSS-animation ticker,
+            // IntersectionObserver lazy-load / pause-when-offscreen.
+            wp_register_style( 'cicwl-modern-carousel-css', plugins_url('/css/continuous-carousel-modern.css', __FILE__),array(),cicwl_mtime_ver('css/continuous-carousel-modern.css') );
+            wp_register_script( 'cicwl-modern-carousel-js', plugins_url('/js/continuous-carousel-modern.js', __FILE__),array(),cicwl_mtime_ver('js/continuous-carousel-modern.js'), true );
+
+            // Modern lightbox — vanilla JS, touch swipe, keyboard nav, focus trap.
+            wp_register_style( 'cicwl-modern-lightbox-css', plugins_url('/css/continuous-lightbox-modern.css', __FILE__),array(),cicwl_mtime_ver('css/continuous-lightbox-modern.css') );
+            wp_register_script( 'cicwl-modern-lightbox-js', plugins_url('/js/continuous-lightbox-modern.js', __FILE__),array(),cicwl_mtime_ver('js/continuous-lightbox-modern.js'), true );
 
         }  
     }
 
     function install_continuous_slider_plus_lightbox(){
+
+        if( ! get_option('cicwl_activation_time') ){
+            update_option('cicwl_activation_time', time());
+        }
 
         global $wpdb;
         $table_name = $wpdb->prefix . "continuous_image_carousel";
@@ -278,7 +499,10 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
         dbDelta($sql);
 
 
-        $continuous_thumbnail_slider_plus_lightbox_settings=array('pauseonmouseover' => '1','speed' => '15000','imageheight' => '120','imagewidth' => '120','visible'=> '5','min_visible'=> '1','resizeImages'=>'1','scollerBackground'=>'#FFFFFF','imageMargin'=>'15');
+        // New installs default to the modern engine; sites upgrading from an
+        // earlier version keep the legacy jQuery/bxSlider/FancyBox engine below
+        // (see the is_array($existingopt) branch) so nothing changes for them.
+        $continuous_thumbnail_slider_plus_lightbox_settings=array('pauseonmouseover' => '1','speed' => '15000','imageheight' => '120','imagewidth' => '120','visible'=> '5','min_visible'=> '1','resizeImages'=>'1','scollerBackground'=>'#FFFFFF','imageMargin'=>'15','slider_engine'=>'modern','lightbox_engine'=>'modern');
 
         $existingopt=get_option('continuous_thumbnail_slider_plus_lightbox_settings');
         if(!is_array($existingopt)){
@@ -295,7 +519,23 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                 $existingopt['show_caption']='0'; 
 
              }
-            
+
+             // Existing site (row already existed before this update) — pin it
+             // to the legacy engine so behaviour/appearance doesn't change on
+             // auto-update. The admin can opt into the modern engine manually.
+             if(!isset($existingopt['slider_engine'])){
+
+                $flag=true;
+                $existingopt['slider_engine']='legacy';
+
+             }
+
+             if(!isset($existingopt['lightbox_engine'])){
+
+                $flag=true;
+                $existingopt['lightbox_engine']='legacy';
+
+             }
 
              if($flag==true){
 
@@ -319,7 +559,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
     function continuous_slider_plus_lightbox_add_admin_menu(){
 
-        $hook_suffix_r_l=add_menu_page( __( 'Continuous Slider plus Lightbox','continuous-image-carousel-with-lightbox'), __( 'Continuous Slider plus Lightbox','continuous-image-carousel-with-lightbox'), 'cicwl_continuous_slider_settings', 'continuous_thumbnail_slider_with_lightbox', 'continuous_thumbnail_slider_with_lightbox_admin_options_func' );
+        $hook_suffix_r_l=add_menu_page( __( 'Continuous Slider plus Lightbox','continuous-image-carousel-with-lightbox'), __( 'Continuous Slider plus Lightbox','continuous-image-carousel-with-lightbox'), 'cicwl_continuous_slider_settings', 'continuous_thumbnail_slider_with_lightbox', 'continuous_thumbnail_slider_with_lightbox_admin_options_func', 'dashicons-images-alt2', 26 );
         $hook_suffix_r_l=add_submenu_page( 'continuous_thumbnail_slider_with_lightbox', __( 'Manage Sliders','continuous-image-carousel-with-lightbox'), __( 'Slider Settings','continuous-image-carousel-with-lightbox' ),'cicwl_continuous_slider_settings', 'continuous_thumbnail_slider_with_lightbox', 'continuous_thumbnail_slider_with_lightbox_admin_options_func' );
         $hook_suffix_r_l_1=add_submenu_page( 'continuous_thumbnail_slider_with_lightbox', __( 'Manage Images','continuous-image-carousel-with-lightbox'), __( 'Manage Images','continuous-image-carousel-with-lightbox'),'cicwl_continuous_slider_view_images', 'continuous_thumbnail_slider_with_lightbox_image_management', 'continuous_thumbnail_slider_with_lightbox_image_management_func' );
         $hook_suffix_r_l_2=add_submenu_page( 'continuous_thumbnail_slider_with_lightbox', __( 'Preview Slider','continuous-image-carousel-with-lightbox'), __( 'Preview Slider','continuous-image-carousel-with-lightbox'),'cicwl_continuous_slider_preview', 'continuous_thumbnail_slider_with_lightbox_preview', 'continuous_thumbnail_slider_with_lightbox_admin_preview_func' );
@@ -343,8 +583,109 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
             wp_enqueue_script('continuous-l-box-js',plugins_url('/js/continuous-l-box-js.js', __FILE__));
             continuous_slider_plus_lightbox_admin_scripts_init();
 
+            // The frontend registration hook (wp_enqueue_scripts) never runs in
+            // wp-admin, but the "Preview Slider" page renders the real slider
+            // via print_continuous_slider_plus_lightbox_func(), which enqueues
+            // the modern engine/lightbox by handle when that setting is on. So
+            // those handles need to be registered here too, or the preview page
+            // would silently fail to load the modern JS/CSS.
+            wp_register_style( 'cicwl-modern-carousel-css', plugins_url('/css/continuous-carousel-modern.css', __FILE__),array(),cicwl_mtime_ver('css/continuous-carousel-modern.css') );
+            wp_register_script( 'cicwl-modern-carousel-js', plugins_url('/js/continuous-carousel-modern.js', __FILE__),array(),cicwl_mtime_ver('js/continuous-carousel-modern.js'), true );
+            wp_register_style( 'cicwl-modern-lightbox-css', plugins_url('/css/continuous-lightbox-modern.css', __FILE__),array(),cicwl_mtime_ver('css/continuous-lightbox-modern.css') );
+            wp_register_script( 'cicwl-modern-lightbox-js', plugins_url('/js/continuous-lightbox-modern.js', __FILE__),array(),cicwl_mtime_ver('js/continuous-lightbox-modern.js'), true );
 
+    }
 
+    function cicwl_render_upgrade_sidebar(){
+        ?>
+        <div id="postbox-container-1" class="postbox-container">
+            <div class="postbox cicwl-upgrade-card">
+                <style>
+                    .cicwl-upgrade-card{border-radius:8px;overflow:hidden;}
+                    .cicwl-upgrade-card .hndle{font-size:15px;font-weight:700;padding:14px 16px;margin:0;border-bottom:1px solid #eee;}
+                    .cicwl-upgrade-card .inside{margin:0;padding:8px 16px 16px;}
+                    .cicwl-upgrade-feature{padding:10px 0;border-bottom:1px solid #f0f0f1;color:#3c434a;font-size:13px;}
+                    .cicwl-upgrade-feature:last-of-type{border-bottom:none;}
+                    .cicwl-upgrade-btn{display:block;text-align:center;background:#3858e9;color:#fff !important;text-decoration:none;font-weight:600;padding:12px 16px;border-radius:6px;margin-top:16px;}
+                    .cicwl-upgrade-btn:hover{background:#2b46c9;color:#fff !important;}
+                </style>
+                <h3 class="hndle"><span><?php echo __('Continuous Carousel PRO','continuous-image-carousel-with-lightbox');?></span></h3>
+                <div class="inside">
+                    <div class="cicwl-upgrade-feature"><?php echo __('Unlimited sliders on one site','continuous-image-carousel-with-lightbox');?></div>
+                    <div class="cicwl-upgrade-feature"><?php echo __('Bulk image upload','continuous-image-carousel-with-lightbox');?></div>
+                    <div class="cicwl-upgrade-feature"><?php echo __('Per-slider border, radius & shadow styling','continuous-image-carousel-with-lightbox');?></div>
+                    <div class="cicwl-upgrade-feature"><?php echo __('Crop / no-crop image control','continuous-image-carousel-with-lightbox');?></div>
+                    <div class="cicwl-upgrade-feature"><?php echo __('Random image order','continuous-image-carousel-with-lightbox');?></div>
+                    <div class="cicwl-upgrade-feature"><?php echo __('Custom lightbox caption styling','continuous-image-carousel-with-lightbox');?></div>
+                    <div class="cicwl-upgrade-feature"><?php echo __('Priority support','continuous-image-carousel-with-lightbox');?></div>
+                    <a class="cicwl-upgrade-btn" target="_blank" href="https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/"><?php echo __('Upgrade to PRO','continuous-image-carousel-with-lightbox');?> &rarr;</a>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    // Shows Pro-only settings as visibly disabled fields, right where they'd
+    // sit if you had them — not just a bullet-list ad. The idea is the
+    // person sees exactly what's missing at the moment they're configuring
+    // related settings, rather than reading about it in a sidebar they've
+    // already learned to ignore.
+    function cicwl_render_pro_locked_features(){
+        ?>
+        <div class="stuffbox cicwl-pro-locked-box" id="namediv" style="width:100%;">
+            <style>
+                .cicwl-pro-locked-box .hndle{display:flex;align-items:center;gap:8px;}
+                .cicwl-pro-badge{display:inline-block;background:#3858e9;color:#fff;font-size:10px;font-weight:700;letter-spacing:.03em;padding:2px 7px;border-radius:999px;text-transform:uppercase;}
+                .cicwl-locked-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:4px;}
+                .cicwl-locked-field{position:relative;border:1px solid #e5e7eb;border-radius:6px;padding:12px 14px;background:#f9fafb;opacity:.72;}
+                .cicwl-locked-field .dashicons-lock{position:absolute;top:10px;right:10px;color:#9ca3af;}
+                .cicwl-locked-field label{display:block;font-weight:600;font-size:12px;margin-bottom:6px;color:#3c434a;}
+                .cicwl-locked-field input[type="text"],.cicwl-locked-field input[type="color"]{width:90%;pointer-events:none;background:#fff;}
+                .cicwl-locked-field .cicwl-locked-radio{pointer-events:none;color:#8a8f98;font-size:12px;}
+                .cicwl-pro-locked-box .cicwl-upgrade-btn{display:inline-block;width:auto;padding:10px 20px;}
+            </style>
+            <h3 class="hndle">
+                <span><?php echo __('Pro Features','continuous-image-carousel-with-lightbox');?></span>
+                <span class="cicwl-pro-badge">PRO</span>
+            </h3>
+            <div class="inside">
+                <p style="margin-top:0;color:#6b7280;font-size:13px;"><?php echo __('These settings are previewed below so you can see what they do — unlock them, plus unlimited independent sliders, with Pro.','continuous-image-carousel-with-lightbox');?></p>
+                <div class="cicwl-locked-grid">
+                    <div class="cicwl-locked-field">
+                        <span class="dashicons dashicons-lock"></span>
+                        <label><?php echo __('Crop Images','continuous-image-carousel-with-lightbox');?></label>
+                        <span class="cicwl-locked-radio"><?php echo __('Crop / No-crop toggle','continuous-image-carousel-with-lightbox');?></span>
+                    </div>
+                    <div class="cicwl-locked-field">
+                        <span class="dashicons dashicons-lock"></span>
+                        <label><?php echo __('Border & Shadow','continuous-image-carousel-with-lightbox');?></label>
+                        <input type="color" value="#cccccc" disabled>
+                    </div>
+                    <div class="cicwl-locked-field">
+                        <span class="dashicons dashicons-lock"></span>
+                        <label><?php echo __('Random Image Order','continuous-image-carousel-with-lightbox');?></label>
+                        <span class="cicwl-locked-radio"><?php echo __('Yes / No','continuous-image-carousel-with-lightbox');?></span>
+                    </div>
+                    <div class="cicwl-locked-field">
+                        <span class="dashicons dashicons-lock"></span>
+                        <label><?php echo __('Lightbox Caption Position','continuous-image-carousel-with-lightbox');?></label>
+                        <span class="cicwl-locked-radio"><?php echo __('Over / Outside','continuous-image-carousel-with-lightbox');?></span>
+                    </div>
+                    <div class="cicwl-locked-field">
+                        <span class="dashicons dashicons-lock"></span>
+                        <label><?php echo __('Bulk Image Upload','continuous-image-carousel-with-lightbox');?></label>
+                        <span class="cicwl-locked-radio"><?php echo __('Add many images at once','continuous-image-carousel-with-lightbox');?></span>
+                    </div>
+                    <div class="cicwl-locked-field">
+                        <span class="dashicons dashicons-lock"></span>
+                        <label><?php echo __('Multiple Sliders','continuous-image-carousel-with-lightbox');?></label>
+                        <span class="cicwl-locked-radio"><?php echo __('Free supports 1 shared slider','continuous-image-carousel-with-lightbox');?></span>
+                    </div>
+                </div>
+                <a class="cicwl-upgrade-btn" target="_blank" href="https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/"><?php echo __('Upgrade to PRO','continuous-image-carousel-with-lightbox');?> &rarr;</a>
+            </div>
+        </div>
+        <?php
     }
 
     function continuous_thumbnail_slider_with_lightbox_admin_options_func(){
@@ -390,7 +731,10 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
             $scollerBackground=trim(htmlentities(sanitize_text_field($_POST['scollerBackground']),ENT_QUOTES));
 
             $show_caption=intval(htmlentities(sanitize_text_field($_POST['show_caption'],ENT_QUOTES)));  
-    
+
+            $slider_engine = ( isset($_POST['slider_engine']) && sanitize_text_field($_POST['slider_engine'])==='modern' ) ? 'modern' : 'legacy';
+            $lightbox_engine = ( isset($_POST['lightbox_engine']) && sanitize_text_field($_POST['lightbox_engine'])==='modern' ) ? 'modern' : 'legacy';
+
             $options=array();
             $options['pauseonmouseover']=$pauseonmouseover;  
             $options['lightbox']=$lightbox;  
@@ -404,6 +748,8 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
             $options['resizeImages']=1;  
             $options['scollerBackground']=$scollerBackground;  
             $options['show_caption']=$show_caption;  
+            $options['slider_engine']=$slider_engine;
+            $options['lightbox_engine']=$lightbox_engine;
            
 
             $settings=update_option('continuous_thumbnail_slider_plus_lightbox_settings',$options); 
@@ -443,9 +789,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                                       }(document, 'script', 'facebook-jssdk'));</script>
                                 </td> 
                             <td>
-                                <a target="_blank" title="Donate" href="http://www.i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                    <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                                </a>
+                                
                             </td>
                         </tr>
                     </table>
@@ -469,7 +813,6 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                         update_option('continuous_thumbnail_slider_plus_lightbox_messages', array());     
                     ?>      
 
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/"><?php echo __('UPGRADE TO PRO VERSION','continuous-image-carousel-with-lightbox');?></a></h3></span>
                     
                     <h2><?php echo __('Slider Settings','continuous-image-carousel-with-lightbox');?></h2>
                     <div id="poststuff">
@@ -494,6 +837,68 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                                         </div>
                                     </div>
+                                    <div class="stuffbox" id="namediv" style="width:100%;">
+                                        <h3><label><?php echo __('Slider Engine','continuous-image-carousel-with-lightbox');?></label></h3>
+                                        <div class="inside">
+                                            <table>
+                                                <tr>
+                                                    <td>
+                                                        <select id="slider_engine" name="slider_engine" style="width:220px;">
+                                                            <option value="modern" <?php if(isset($settings['slider_engine']) && $settings['slider_engine']==='modern'){echo "selected='selected'";} ?>><?php echo __('Modern (recommended, no jQuery)','continuous-image-carousel-with-lightbox');?></option>
+                                                            <option value="legacy" <?php if(!isset($settings['slider_engine']) || $settings['slider_engine']!=='modern'){echo "selected='selected'";} ?>><?php echo __('Legacy (original engine)','continuous-image-carousel-with-lightbox');?></option>
+                                                        </select>
+                                                        <div style="clear:both;margin-top:3px"><?php echo __('Modern uses a lightweight CSS/vanilla-JS ticker with no jQuery dependency. Switch back to Legacy any time if a theme conflict comes up.','continuous-image-carousel-with-lightbox');?></div>
+                                                        <div></div>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                            <div style="clear:both"></div>
+                                        </div>
+                                    </div>
+                                    <div class="stuffbox" id="namediv" style="width:100%;">
+                                        <h3><label><?php echo __('Lightbox Engine','continuous-image-carousel-with-lightbox');?></label></h3>
+                                        <div class="inside">
+                                            <table>
+                                                <tr>
+                                                    <td>
+                                                        <select id="lightbox_engine" name="lightbox_engine" style="width:220px;">
+                                                            <option value="modern" <?php if(isset($settings['lightbox_engine']) && $settings['lightbox_engine']==='modern'){echo "selected='selected'";} ?>><?php echo __('Modern (recommended, no jQuery)','continuous-image-carousel-with-lightbox');?></option>
+                                                            <option value="legacy" <?php if(!isset($settings['lightbox_engine']) || $settings['lightbox_engine']!=='modern'){echo "selected='selected'";} ?>><?php echo __('Legacy (original FancyBox)','continuous-image-carousel-with-lightbox');?></option>
+                                                        </select>
+                                                        <div style="clear:both;margin-top:3px"><?php echo __('Modern is a vanilla-JS lightbox with touch swipe and keyboard navigation.','continuous-image-carousel-with-lightbox');?></div>
+                                                        <div></div>
+                                                    </td>
+                                                </tr>
+                                            </table>
+                                            <div style="clear:both"></div>
+                                        </div>
+                                    </div>
+                                    <script>
+                                        (function () {
+                                            function cicwlToggleEngineFields() {
+                                                var sliderSel = document.getElementById('slider_engine');
+                                                var lightboxSel = document.getElementById('lightbox_engine');
+                                                var sliderModern = sliderSel && sliderSel.value === 'modern';
+                                                var lightboxModern = lightboxSel && lightboxSel.value === 'modern';
+                                                var i;
+                                                var legacySlider = document.getElementsByClassName('cicwl-legacy-only-slider');
+                                                for (i = 0; i < legacySlider.length; i++) {
+                                                    legacySlider[i].style.display = sliderModern ? 'none' : '';
+                                                }
+                                                var legacyLightbox = document.getElementsByClassName('cicwl-legacy-only-lightbox');
+                                                for (i = 0; i < legacyLightbox.length; i++) {
+                                                    legacyLightbox[i].style.display = lightboxModern ? 'none' : '';
+                                                }
+                                            }
+                                            document.addEventListener('DOMContentLoaded', function () {
+                                                cicwlToggleEngineFields();
+                                                var sliderSel = document.getElementById('slider_engine');
+                                                var lightboxSel = document.getElementById('lightbox_engine');
+                                                if (sliderSel) { sliderSel.addEventListener('change', cicwlToggleEngineFields); }
+                                                if (lightboxSel) { lightboxSel.addEventListener('change', cicwlToggleEngineFields); }
+                                            });
+                                        })();
+                                    </script>
                                      <div class="stuffbox" id="namediv" style="width:100%;">
                                         <h3><label><?php echo __('Display Lightbox On Image Click?','continuous-image-carousel-with-lightbox');?></label></h3>
                                         <div class="inside">
@@ -542,7 +947,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                                         </div>
                                     </div>
-                                    <div class="stuffbox" id="namediv" style="width:100%;">
+                                    <div class="stuffbox cicwl-legacy-only-slider" id="namediv" style="width:100%;">
                                         <h3><label><?php echo __('Min Visible','continuous-image-carousel-with-lightbox');?></label></h3>
                                         <div class="inside">
                                             <table>
@@ -637,6 +1042,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                                             <div style="clear:both"></div>
                                         </div>
                                      </div>
+                                     <?php cicwl_render_pro_locked_features(); ?>
                                       
                                      <?php wp_nonce_field('action_image_add_edit','add_edit_image_nonce'); ?>           
                                     <input type="submit"  name="btnsave" id="btnsave" value="<?php echo __('Save Changes','continuous-image-carousel-with-lightbox');?>" class="button-primary">&nbsp;&nbsp;<input type="button" name="cancle" id="cancle" value="<?php echo __('Cancel','continuous-image-carousel-with-lightbox');?>" class="button-primary" onclick="location.href='admin.php?page=continuous_thumbnail_slider_with_lightbox_image_management'">
@@ -704,29 +1110,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                     </div>  
                 </div>      
             </div>
-            <div id="postbox-container-1" class="postbox-container"> 
-                    <div class="postbox"> 
-                        <h3 class="hndle"><span></span><?php echo __('New DIVI AI Theme','continuous-image-carousel-with-lightbox'); ?></h3> 
-                        <div class="inside">
-                            <center><a href="https://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715&url=80806" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/divi_300x250.jpg', __FILE__ );?>" width="250" height="250"></a></center>
-
-                            <div style="margin:10px 5px">
-
-                            </div>
-                        </div></div>
-
-                     <div class="postbox"> 
-                        <h3 class="hndle"><span></span><?php echo __('Google For Business Coupon','continuous-image-carousel-with-lightbox');?></h3> 
-                            <div class="inside">
-                                <center><a href="https://goo.gl/OJBuHT" target="_blank">
-                                        <img src="<?php echo plugins_url( 'images/g-suite-promo-code-4.png', __FILE__ );?>" width="250" height="250" border="0">
-                                    </a></center>
-                                <div style="margin:10px 5px">
-                                </div>
-                            </div>
-
-                        </div>
-                </div> 
+            <?php cicwl_render_upgrade_sidebar(); ?>
             <div class="clear"></div>
         </div>  
     </div> 
@@ -784,9 +1168,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                               }(document, 'script', 'facebook-jssdk'));</script>
                         </td> 
                         <td>
-                            <a target="_blank" title="Donate" href="http://www.i13websolution.com/donate-wordpress_image_thumbnail.php">
-                                <img id="help us for free plugin" height="30" width="90" src="<?php echo plugins_url( 'images/paypaldonate.jpg', __FILE__ );?>" border="0" alt="help us for free plugin" title="help us for free plugin">
-                            </a>
+                            
                         </td>
                     </tr>
                 </table>
@@ -822,7 +1204,6 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                 
                     <div class="icon32 icon32-posts-post" id="icon-edit"><br></div>
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/"><?php echo __('UPGRADE TO PRO VERSION','continuous-image-carousel-with-lightbox');?></a></h3></span>
                     <h2><?php echo __('Images','continuous-image-carousel-with-lightbox');?> <a class="button add-new-h2" href="admin.php?page=continuous_thumbnail_slider_with_lightbox_image_management&action=addedit"><?php echo __('Add New','continuous-image-carousel-with-lightbox');?></a> 
                     &nbsp;&nbsp;
                        <a class="massAdd button add-new-h2" href="javascript:void(0)"><?php echo __('Mass Add','continuous-image-carousel-with-lightbox');?></a>
@@ -1215,29 +1596,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                     <input type="text" value="echo do_shortcode('[print_continuous_slider_plus_lightbox]');" style="width: 400px;height: 30px" onclick="this.focus();this.select()" />
                     <div class="clear"></div>
                 </div>
-                <div id="postbox-container-1" class="postbox-container"> 
-                    <div class="postbox"> 
-                        <h3 class="hndle"><span></span><?php echo __('Access All Themes One price','continuous-image-carousel-with-lightbox'); ?></h3> 
-                        <div class="inside">
-                            <center><a href="https://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_5_1_18" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.jpg', __FILE__ );?>" width="250" height="250"></a></center>
-
-                            <div style="margin:10px 5px">
-
-                            </div>
-                        </div></div>
-
-                     <div class="postbox"> 
-                        <h3 class="hndle"><span></span><?php echo __('Google For Business Coupon','continuous-image-carousel-with-lightbox');?></h3> 
-                            <div class="inside">
-                                <center><a href="https://goo.gl/OJBuHT" target="_blank">
-                                        <img src="<?php echo plugins_url( 'images/g-suite-promo-code-4.png', __FILE__ );?>" width="250" height="250" border="0">
-                                    </a></center>
-                                <div style="margin:10px 5px">
-                                </div>
-                            </div>
-
-                        </div>
-                </div>
+                <?php cicwl_render_upgrade_sidebar(); ?>
             </div>
         </div>
 
@@ -1445,7 +1804,6 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                 $baseurl.='/continuous-image-carousel-with-lightbox/';
             ?>
             <div id="poststuff">  
-            <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/"><?php echo __('UPGRADE TO PRO VERSION','continuous-image-carousel-with-lightbox');?></a></h3></span>
             <div id="post-body" class="metabox-holder columns-2" >
                 <div id="post-body-content">
                     <?php if(isset($_GET['id']) and intval($_GET['id'])>0)
@@ -1707,29 +2065,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                         </div>
                     </div>  
                 </div>      
-                <div id="postbox-container-1" class="postbox-container"> 
-                    <div class="postbox"> 
-                        <h3 class="hndle"><span></span><?php echo __('Access All Themes One price','continuous-image-carousel-with-lightbox'); ?></h3> 
-                        <div class="inside">
-                            <center><a href="https://www.elegantthemes.com/affiliates/idevaffiliate.php?id=11715_5_1_18" target="_blank"><img border="0" src="<?php echo plugins_url( 'images/300x250.jpg', __FILE__ );?>" width="250" height="250"></a></center>
-
-                            <div style="margin:10px 5px">
-
-                            </div>
-                        </div></div>
-
-                     <div class="postbox"> 
-                        <h3 class="hndle"><span></span><?php echo __('Google For Business Coupon','continuous-image-carousel-with-lightbox');?></h3> 
-                            <div class="inside">
-                                <center><a href="https://goo.gl/OJBuHT" target="_blank">
-                                        <img src="<?php echo plugins_url( 'images/g-suite-promo-code-4.png', __FILE__ );?>" width="250" height="250" border="0">
-                                    </a></center>
-                                <div style="margin:10px 5px">
-                                </div>
-                            </div>
-
-                        </div>
-                </div>
+                <?php cicwl_render_upgrade_sidebar(); ?>
 
             </div>
             <?php 
@@ -1921,8 +2257,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
         }
     </style>
     <div style="">  
-        <div style="float:left;">
-            <div class="wrap">
+        <div class="wrap">
                 <h2><?php echo __('Slider Preview','continuous-image-carousel-with-lightbox');?></h2>
                 <br>
 
@@ -1940,302 +2275,8 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                 ?>
                 <div id="poststuff">
-                    <span><h3 style="color: blue;"><a target="_blank" href="https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/"><?php echo __('UPGRADE TO PRO VERSION','continuous-image-carousel-with-lightbox');?></a></h3></span>
-                    <div id="post-body" class="metabox-holder columns-2">
-                        <div id="post-body-content">
-                            <div style="clear: both;"></div>
-                            <?php $url = plugin_dir_url(__FILE__);  ?>
-                            <div id="divResponsiveSliderPlusLightboxMain_admin">
-                                
-                             <?php 
-                                    
-                                        $topMargin='5'.'px'; 
-                              ?>
-                            <?php if($settings['lightbox']):?>
-                            <script>
-                             function clickedItem(){ 
-
-                                              var uniqObj=jQuery("a[rel^='<?php echo $randOmeAlbName;?>']"); 
-                                              jQuery(".<?php echo $rand_lightbox_rel;?>").fancybox_crl({
-                                                'overlayColor':'#000000',
-                                                 'padding': 10,
-                                                 'autoScale': true,
-                                                 'autoDimensions':true,
-                                                 'transitionIn': 'none',
-                                                 'uniqObj':uniqObj,
-                                                 'transitionOut': 'none',
-                                                 'titlePosition': 'over',
-                                                 'cyclic':true,
-                                                 'hideOnContentClick':false,
-                                                 'width' : 600,
-                                                 'height' : 350,
-                                                 'titleFormat': function(title, currentArray, currentIndex, currentOpts) {
-                                                     var currtElem = jQuery('.responsiveSlider a[href="'+currentOpts.href+'"]');
-
-                                                     var isoverlay = jQuery(currtElem).attr('data-overlay')
-
-                                                    if(isoverlay=="1" && jQuery.trim(title)!=""){
-                                                     return '<span id="fancybox_crl-title-over">' + title  + '</span>';
-                                                    }
-                                                    else{
-                                                        return '';
-                                                    }
-
-                                                    },
-
-                                               });
-
-                                               return false;
-                                          }
-                             </script>
-                             <?php endif;?>
-                                <div class="responsiveSlider" style="margin-top: <?php echo $topMargin;?> !important;display: none">
-                                    <?php
-                                        global $wpdb;
-                                        $imageheight=$settings['imageheight'];
-                                        $imagewidth=$settings['imagewidth'];
-                                        $query="SELECT * FROM ".$wpdb->prefix."continuous_image_carousel order by createdon desc";
-                                        $rows=$wpdb->get_results($query,'ARRAY_A');
-                                       
-                                        if(count($rows) > 0){
-                                            foreach($rows as $row){
-
-                                                $imagename=$row['image_name'];
-                                                $imageUploadTo=$baseurl.$imagename;
-                                                $imageUploadTo=str_replace("\\","/",$imageUploadTo);
-                                                $pathinfo=pathinfo($imageUploadTo);
-                                                $filenamewithoutextension=$pathinfo['filename'];
-                                                $outputimg="";
-
-                                                $outputimgmain = $baseurl.$row['image_name']; 
-                                                if($settings['resizeImages']==0){
-
-                                                    $outputimg = $baseurl.$row['image_name']; 
-
-                                                }
-                                                else{
-                                                    
-                                                    $imagetoCheck=$pathToImagesFolder.'/'.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                    $imagetoCheckSmall=$pathToImagesFolder.'/'.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                              
-                                                    if(file_exists($imagetoCheck)){
-                                                        $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                    }
-                                                    else if(file_exists($imagetoCheckSmall)){
-                                                        $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                                                    }
-                                                    else{
-
-                                                        if(function_exists('wp_get_image_editor')){
-
-                                                            
-                                                            $image = wp_get_image_editor($pathToImagesFolder.'/'.$row['image_name']); 
-
-                                                            if ( ! is_wp_error( $image ) ) {
-                                                                $image->resize( $imagewidth, $imageheight, true );
-                                                                $image->save( $imagetoCheck );
-                                                               // $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                                
-                                                                if(file_exists($imagetoCheck)){
-                                                                    $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                                }
-                                                                else if(file_exists($imagetoCheckSmall)){
-                                                                    $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                                                                }
-
-                                                            }
-                                                            else{
-                                                                $outputimg = $baseurl.$row['image_name'];
-                                                            }     
-
-                                                        }
-                                                        else if(function_exists('image_resize')){
-
-                                                            $return=image_resize($pathToImagesFolder."/".$row['image_name'],$imagewidth,$imageheight) ;
-                                                            if ( ! is_wp_error( $return ) ) {
-
-                                                                $isrenamed=rename($return,$imagetoCheck);
-                                                                if($isrenamed){
-                                                                    //$outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];  
-                                                                    
-                                                                      if(file_exists($imagetoCheck)){
-                                                                            $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-                                                                        }
-                                                                        else if(file_exists($imagetoCheckSmall)){
-                                                                            $outputimg = $baseurl.$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.strtolower($pathinfo['extension']);
-                                                                        }
-
-                                                                }
-                                                                else{
-                                                                    $outputimg = $baseurl.$row['image_name']; 
-                                                                } 
-                                                            }
-                                                            else{
-                                                                $outputimg = $baseurl.$row['image_name'];
-                                                            }  
-                                                        }
-                                                        else{
-
-                                                            $outputimg = $baseurl.$row['image_name'];
-                                                        }  
-
-                                                        //$url = plugin_dir_url(__FILE__)."imagestoscroll/".$filenamewithoutextension.'_'.$imageheight.'_'.$imagewidth.'.'.$pathinfo['extension'];
-
-                                                    } 
-                                                } 
-
-                                                $title="";
-                                                $rowTitle=$row['title'];
-                                                $rowTitle=str_replace("'","’",$rowTitle); 
-                                                $rowTitle=str_replace('"','”',$rowTitle); 
-                                                if(trim($row['title'])!='' and trim($row['custom_link'])!=''){
-
-                                                    $title="<a class='Imglink' target='_blank' href='{$row['custom_link']}'>{$rowTitle}</a>";
-
-                                                }
-                                                else if(trim($row['title'])!='' and trim($row['custom_link'])==''){
-
-                                                    $title="<a class='Imglink' href='#'>{$rowTitle}</a>"; 
-
-                                                }
-                                                else{
-
-                                                    if($row['title']!='')
-                                                        $title="<a class='Imglink' target='_blank' href='#'>{$rowTitle}</a>"; 
-                                                }
-
-                                                $title= htmlentities($title);
-                                            ?>         
-
-                                            <div > 
-                                                <a rel="<?php echo $randOmeAlbName;?>" data-overlay="1" data-title="<?php echo $title;?>" class="<?php echo $rand_lightbox_rel;?>"  <?php if($settings['lightbox']):?> href="<?php echo $outputimgmain;?>" <?php elseif($row['custom_link']!=''):?> href="<?php echo $row['custom_link'];?>" <?php else: ?><?php endif;?>>
-                                                    <img <?php if($settings['lightbox']):?> onclick="return clickedItem();" <?php endif;?> src="<?php echo $outputimg; ?>" alt="<?php echo $rowTitle; ?>" title="<?php echo $rowTitle;?>"  />
-                                                </a> 
-                                            </div>
-
-                                            <?php }?>   
-                                        <?php }?>   
-                                </div>
-                            </div>
-                            <script>
-                                
-                                var uniqObj=jQuery("a[rel^='<?php echo $randOmeAlbName;?>']");
-                                jQuery(document).ready(function(){
-                                    
-                                        jQuery(".responsiveSlider").show();
-                                        var sliderMainHtmladmin=jQuery('#divResponsiveSliderPlusLightboxMain_admin').html();      
-                                        var slider= jQuery('.responsiveSlider').bxSlider({
-                                            slideWidth: <?php echo $settings['imagewidth'];?>,
-                                           minSlides: <?php echo $settings['min_visible'];?>,
-                                           maxSlides: <?php echo $settings['visible'];?>,
-                                           slideMargin:<?php echo $settings['imageMargin'];?>,  
-                                           speed:<?php echo $settings['speed']; ?>,
-                                           useCSS:false,
-                                           ticker: true,
-                                           <?php if($settings['pauseonmouseover']):?>
-                                               tickerHover:true, 
-                                            <?php endif;?>           
-                                             <?php if($settings['show_caption']):?>
-                                             captions:true
-                                            <?php else:?>
-                                              captions:false
-                                            <?php endif;?>
-                                          
-
-                                        });
-                                      
-                                        
-                                });
-                                
-                                     window.addEventListener('load', function() {
-
-
-                                        setTimeout(function(){ 
-
-                                                if(jQuery(".responsiveSlider").find('.bx-loading').length>0){
-
-                                                        jQuery(".responsiveSlider").find('img').each(function(index, elm) {
-
-                                                                if(!elm.complete || elm.naturalWidth === 0){
-
-                                                                    var toload='';
-                                                                    var toloadval='';
-                                                                    jQuery.each(this.attributes, function(i, attrib){
-
-                                                                            var value = attrib.value;
-                                                                            var aname=attrib.name;
-
-                                                                            var pattern = /^((http|https):\/\/)/;
-
-                                                                            if(pattern.test(value) && aname!='src') {
-
-                                                                                    toload=aname;
-                                                                                    toloadval=value;
-                                                                             }
-                                                                            // do your magic :-)
-                                                                     });
-
-                                                                            vsrc=jQuery(elm).attr("src");
-                                                                            jQuery(elm).removeAttr("src");
-                                                                            dsrc=jQuery(elm).attr("data-src");
-                                                                            lsrc=jQuery(elm).attr("data-lazy-src");
-
-
-                                                                               if(dsrc!== undefined && dsrc!='' && dsrc!=vsrc){
-                                                                                                             jQuery(elm).attr("src",dsrc);
-                                                                                    }
-                                                                                    else if(lsrc!== undefined && lsrc!=vsrc){
-
-                                                                                                     jQuery(elm).attr("src",lsrc);
-                                                                                    }
-                                                                                    else if(toload!='' && toload!='srcset' && toloadval!='' && toloadval!=vsrc){
-
-                                                                                            jQuery(elm).removeAttr(toload);
-                                                                                            jQuery(elm).attr("src",toloadval);
-
-
-                                                                                        } 
-                                                                                    else{
-
-                                                                                                    jQuery(elm).attr("src",vsrc);
-
-                                                                               }   
-
-                                                                            elm=jQuery(elm)[0];      
-                                                                             if(!elm.complete && elm.naturalHeight == 0){
-
-                                                                            jQuery(elm).removeAttr('loading');
-                                                                            jQuery(elm).removeAttr('data-lazy-type');
-
-
-                                                                            jQuery(elm).removeClass('lazy');
-
-                                                                            jQuery(elm).removeClass('lazyLoad');
-                                                                            jQuery(elm).removeClass('lazy-loaded');
-                                                                            jQuery(elm).removeClass('jetpack-lazy-image');
-                                                                            jQuery(elm).removeClass('jetpack-lazy-image--handled');
-                                                                            jQuery(elm).removeClass('lazy-hidden');
-
-                                                                        }
-                                                                 }
-
-                                                            }).promise().done( function(){ 
-
-                                                                    jQuery(".responsiveSlider").find('.bx-loading').remove();
-                                                            } );
-
-                                                    }
-
-
-                                           }, 6000);
-
-                                });
-                            </script>
-
-                        </div>
-                    </div>      
+                    <?php echo print_continuous_slider_plus_lightbox_func(array()); ?>
                 </div>  
-            </div>      
         </div>
         <div class="clear"></div>
     </div>
@@ -2272,12 +2313,37 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
         $pathToImagesFolder=$baseDir.'/continuous-image-carousel-with-lightbox';
         $rand_lightbox_rel=uniqid('lightbox_rel');
         $randOmeAlbName=uniqid('slider_');
-        
+
+        // 'legacy' = original jQuery/bxSlider/FancyBox behaviour, unchanged.
+        // 'modern' = new dependency-free engine. Defaults to 'legacy' here too
+        // (belt-and-braces alongside the upgrade path in install_continuous_slider_plus_lightbox)
+        // so a site is never silently switched.
+        $slider_engine = ( isset($settings['slider_engine']) && $settings['slider_engine']==='modern' ) ? 'modern' : 'legacy';
+        $lightbox_engine = ( isset($settings['lightbox_engine']) && $settings['lightbox_engine']==='modern' ) ? 'modern' : 'legacy';
+
+        // Base stylesheet (image sizing, .limargin spacing) is shared by both engines.
         wp_enqueue_style( 'images-continuous-thumbnail-slider-plus-lighbox-style');
-        wp_enqueue_style( 'continuous-l-box-css');
-        wp_enqueue_script('jquery'); 
-        wp_enqueue_script('images-continuous-thumbnail-slider-plus-lightbox-jc');
-        wp_enqueue_script('continuous-l-box-js');
+
+        if($slider_engine==='modern'){
+            wp_enqueue_style( 'cicwl-modern-carousel-css');
+            wp_enqueue_script('cicwl-modern-carousel-js');
+        }
+        else{
+            wp_enqueue_script('jquery');
+            wp_enqueue_script('images-continuous-thumbnail-slider-plus-lightbox-jc');
+        }
+
+        if($settings['lightbox']){
+            if($lightbox_engine==='modern'){
+                wp_enqueue_style( 'cicwl-modern-lightbox-css');
+                wp_enqueue_script('cicwl-modern-lightbox-js');
+            }
+            else{
+                wp_enqueue_style( 'continuous-l-box-css');
+                wp_enqueue_script('jquery');
+                wp_enqueue_script('continuous-l-box-js');
+            }
+        }
 
         ob_start();
     ?><!-- print_continuous_slider_plus_lightbox_func --><style type='text/css' >
@@ -2296,7 +2362,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                                     
                     $topMargin='5'.'px'; 
           ?>
-        <?php if($settings['lightbox']):?>
+        <?php if($settings['lightbox'] && $lightbox_engine==='legacy'):?>
         <script>
          function clickedItem(){ 
                             
@@ -2335,7 +2401,18 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                       }
          </script>
          <?php endif;?>
-        <div class="responsiveContinuousCarousel" style="margin-top: <?php echo $topMargin;?> !important;display: none;">
+        <div class="responsiveContinuousCarousel cicwl-slider-wrap cicwl-engine-<?php echo esc_attr($slider_engine);?>" style="margin-top: <?php echo $topMargin;?> !important;display: none;"
+             <?php if($slider_engine==='modern'):?>
+             data-cicwl-speed="<?php echo esc_attr($settings['speed']);?>"
+             data-cicwl-visible="<?php echo esc_attr($settings['visible']);?>"
+             data-cicwl-min-visible="<?php echo esc_attr($settings['min_visible']);?>"
+             data-cicwl-margin="<?php echo esc_attr($settings['imageMargin']);?>"
+             data-cicwl-imagewidth="<?php echo esc_attr($settings['imagewidth']);?>"
+             data-cicwl-pause-hover="<?php echo $settings['pauseonmouseover'] ? '1' : '0';?>"
+             data-cicwl-caption="<?php echo $settings['show_caption'] ? '1' : '0';?>"
+             data-cicwl-lightbox="<?php echo ($settings['lightbox'] && $lightbox_engine==='modern') ? '1' : '0';?>"
+             data-cicwl-bg="<?php echo esc_attr($settings['scollerBackground']);?>"
+             <?php endif;?>>
             <?php
                 global $wpdb;          
                 $imageheight=$settings['imageheight'];
@@ -2461,8 +2538,17 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
             
 
                     <div class="limargin"> 
-                       <a rel="<?php echo $randOmeAlbName;?>" data-overlay="1" data-title="<?php echo $title;?>" class="<?php echo $rand_lightbox_rel;?>"  <?php if($settings['lightbox']):?> href="<?php echo $outputimgmain;?>" <?php elseif($row['custom_link']!=''):?> href="<?php echo $row['custom_link'];?>" <?php else: ?><?php endif;?>>
-                            <img <?php if($settings['lightbox']):?> onclick="return clickedItem();" <?php endif;?> src="<?php echo $outputimg; ?>" alt="<?php echo $rowTitle; ?>" title="<?php echo $rowTitle;?>"  />
+                       <a rel="<?php echo $randOmeAlbName;?>" data-overlay="1" data-title="<?php echo $title;?>" class="<?php echo $rand_lightbox_rel;?>"
+                          <?php if($settings['lightbox'] && $lightbox_engine==='modern'):?>
+                             data-cicwl-lightbox-src="<?php echo esc_url($outputimgmain);?>"
+                             data-cicwl-lightbox-caption="<?php echo $title;?>"
+                             href="<?php echo esc_url($outputimgmain);?>"
+                          <?php elseif($settings['lightbox']):?>
+                             href="<?php echo $outputimgmain;?>"
+                          <?php elseif($row['custom_link']!=''):?>
+                             href="<?php echo $row['custom_link'];?>"
+                          <?php endif;?>>
+                            <img <?php if($settings['lightbox'] && $lightbox_engine==='legacy'):?> onclick="return clickedItem();" <?php endif;?> src="<?php echo $outputimg; ?>" alt="<?php echo $rowTitle; ?>" title="<?php echo $rowTitle;?>"  />
                         </a> 
                     </div>
 
@@ -2470,6 +2556,17 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
                 <?php }?>   
         </div>
     </div>                   
+    <?php if($slider_engine==='modern'):?>
+    <script>
+        // Modern engine self-initializes from data-cicwl-* attributes on
+        // DOMContentLoaded (see continuous-carousel-modern.js) — nothing to
+        // do here. This block is only a marker so the wrapper is revealed
+        // even if the modern script hasn't loaded yet for some reason.
+        (function(){
+            var el = document.currentScript.previousElementSibling;
+        })();
+    </script>
+    <?php else: /* legacy engine — original bxSlider init, unchanged */ ?>
     <script>
 
       <?php $intval= uniqid('interval_');?>
@@ -2480,9 +2577,9 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
            clearInterval(<?php echo $intval;?>);
                 
-                     jQuery(".responsiveContinuousCarousel").show();
+                     jQuery(".responsiveContinuousCarousel.cicwl-engine-legacy").show();
                     var uniqObj=jQuery("a[rel^='<?php echo $randOmeAlbName;?>']");
-                         var slider= jQuery('.responsiveContinuousCarousel').bxSlider({
+                         var slider= jQuery('.responsiveContinuousCarousel.cicwl-engine-legacy').bxSlider({
                              slideWidth: <?php echo $settings['imagewidth'];?>,
                             minSlides: <?php echo $settings['min_visible'];?>,
                             maxSlides: <?php echo $settings['visible'];?>,
@@ -2518,9 +2615,9 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                 setTimeout(function(){ 
 
-                        if(jQuery(".responsiveContinuousCarousel").find('.bx-loading').length>0){
+                        if(jQuery(".responsiveContinuousCarousel.cicwl-engine-legacy").find('.bx-loading').length>0){
 
-                                jQuery(".responsiveContinuousCarousel").find('img').each(function(index, elm) {
+                                jQuery(".responsiveContinuousCarousel.cicwl-engine-legacy").find('img').each(function(index, elm) {
 
                                         if(!elm.complete || elm.naturalWidth === 0){
 
@@ -2587,7 +2684,7 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
                                     }).promise().done( function(){ 
 
-                                            jQuery(".responsiveContinuousCarousel").find('.bx-loading').remove();
+                                            jQuery(".responsiveContinuousCarousel.cicwl-engine-legacy").find('.bx-loading').remove();
                                     } );
 
                             }
@@ -2598,7 +2695,9 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
         });
                                 
             
-    </script><!-- end print_continuous_slider_plus_lightbox_func --><?php
+    </script><!-- end print_continuous_slider_plus_lightbox_func -->
+    <?php endif; /* end legacy vs modern slider_engine branch */ ?>
+    <?php
         $output = ob_get_clean();
         return $output;
     }

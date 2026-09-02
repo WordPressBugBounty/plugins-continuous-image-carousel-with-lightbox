@@ -1,0 +1,76 @@
+/* Continuous Image Carousel With Lightbox — modern lightbox styles */
+
+.cicwl-modern-lightbox-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.85);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+    padding: 40px;
+    box-sizing: border-box;
+}
+
+.cicwl-modern-lightbox-overlay.is-open {
+    display: flex;
+}
+
+.cicwl-modern-lightbox-stage {
+    max-width: 90vw;
+    max-height: 90vh;
+    text-align: center;
+}
+
+.cicwl-modern-lightbox-img {
+    max-width: 90vw;
+    max-height: 80vh;
+    display: block;
+    margin: 0 auto;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+}
+
+.cicwl-modern-lightbox-caption {
+    color: #fff;
+    margin-top: 12px;
+    font-size: 14px;
+}
+
+.cicwl-modern-lightbox-close,
+.cicwl-modern-lightbox-prev,
+.cicwl-modern-lightbox-next {
+    position: absolute;
+    background: transparent;
+    border: none;
+    color: #fff;
+    cursor: pointer;
+    padding: 10px 16px;
+    line-height: 1;
+}
+
+.cicwl-modern-lightbox-close {
+    top: 10px;
+    right: 20px;
+    font-size: 34px;
+}
+
+.cicwl-modern-lightbox-prev,
+.cicwl-modern-lightbox-next {
+    font-size: 32px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.cicwl-modern-lightbox-prev {
+    left: 10px;
+}
+
+.cicwl-modern-lightbox-next {
+    right: 10px;
+}
+
+.cicwl-modern-lightbox-close:focus,
+.cicwl-modern-lightbox-prev:focus,
+.cicwl-modern-lightbox-next:focus {
+    outline: 2px solid #fff;
+}

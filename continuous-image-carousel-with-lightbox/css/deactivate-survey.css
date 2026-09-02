@@ -1,0 +1,91 @@
+.cicwl-deactivate-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 100000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.cicwl-deactivate-modal {
+    background: #fff;
+    border-radius: 8px;
+    max-width: 440px;
+    width: 100%;
+    padding: 24px;
+    box-sizing: border-box;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+}
+
+.cicwl-deactivate-modal h2 {
+    margin: 0 0 6px;
+    font-size: 18px;
+}
+
+.cicwl-deactivate-subtitle {
+    margin: 0 0 16px;
+    color: #6b7280;
+    font-size: 13px;
+}
+
+.cicwl-deactivate-reasons {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
+}
+
+.cicwl-deactivate-reason {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.cicwl-deactivate-reason:hover {
+    background: #f3f4f6;
+}
+
+.cicwl-deactivate-pro-pitch {
+    background: #eef2ff;
+    border: 1px solid #c7d2fe;
+    border-radius: 6px;
+    padding: 12px 14px;
+    margin: 8px 0 16px;
+}
+
+.cicwl-deactivate-pro-pitch h3 {
+    margin: 0 0 6px;
+    font-size: 14px;
+}
+
+.cicwl-deactivate-pro-pitch p {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #3c434a;
+}
+
+.cicwl-deactivate-pro-btn {
+    text-decoration: none;
+}
+
+.cicwl-deactivate-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+}
+
+.cicwl-deactivate-skip {
+    margin-left: auto;
+    color: #6b7280;
+    font-size: 12px;
+    text-decoration: underline;
+}

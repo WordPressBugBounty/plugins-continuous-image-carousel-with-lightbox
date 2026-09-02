@@ -1,0 +1,55 @@
+/* Continuous Image Carousel With Lightbox — modern engine styles */
+
+.cicwl-engine-modern {
+    overflow: hidden;
+    position: relative;
+    width: 100%;
+}
+
+.cicwl-engine-modern .cicwl-modern-track {
+    display: flex;
+    align-items: center;
+    width: max-content;
+    animation-name: cicwl-modern-ticker;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    will-change: transform;
+}
+
+/* img is an inline element by default, which leaves a few pixels of
+   descender whitespace below it inside its block-level wrapper — this is
+   what showed up as "extra gap" under each image. */
+.cicwl-engine-modern img {
+    display: block;
+}
+
+.cicwl-engine-modern .cicwl-modern-caption {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    color: #fff;
+    font-size: 12px;
+    line-height: 1.4;
+    padding: 4px 8px;
+    box-sizing: border-box;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+@keyframes cicwl-modern-ticker {
+    from {
+        transform: translateX(0);
+    }
+    to {
+        transform: translateX(-50%);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cicwl-engine-modern .cicwl-modern-track {
+        animation: none;
+    }
+}
