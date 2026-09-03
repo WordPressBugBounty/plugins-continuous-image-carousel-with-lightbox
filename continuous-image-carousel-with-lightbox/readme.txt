@@ -17,6 +17,9 @@ An auto-scrolling image ticker & logo slider for WordPress with a responsive lig
 
 Choose between two engines: a brand-new **dependency-free "Modern" engine with no jQuery required**, or the original engine for maximum theme compatibility. Add your slider with a simple shortcode, or drop it in visually with the built-in **Gutenberg block** — no shortcode needed.
 
+[youtube https://www.youtube.com/watch?v=IIltD_9L1Gs]
+
+
 **Live Demo  [Image Ticker & Logo Slider](http://blog.i13websolution.com/wp-continuous-slider-with-lightbox-pro/)**
 
 **Want unlimited sliders, bulk image upload, crop/border/shadow styling, and native Divi & Elementor support?** Find **Logo Slider & Image Ticker Pro** at [i13websolution.com](https://www.i13websolution.com/product/wordpress-continuous-image-carousel-with-lightbox-pro/)
