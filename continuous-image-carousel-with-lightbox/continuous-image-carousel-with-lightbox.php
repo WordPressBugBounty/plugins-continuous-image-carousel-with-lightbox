@@ -5,7 +5,7 @@
     Author URI:https://www.i13websolution.com
     Description:An auto-scrolling image ticker & logo slider for WordPress with a responsive lightbox. Choose a dependency-free "Modern" engine (no jQuery) or the original engine, and add it via shortcode or the native Gutenberg block.
     Author:I Thirteen Web Solution
-    Version:2.0
+    Version:2.0.1
     Text Domain:continuous-image-carousel-with-lightbox
     Domain Path: /languages
     */
@@ -2731,35 +2731,29 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
         }
     }
     
-    function cicwlp_remove_extra_p_tags($content){
-
-        if(strpos($content, 'print_continuous_slider_plus_lightbox_func')!==false){
-        
-            
-            $pattern = "/<!-- print_continuous_slider_plus_lightbox_func -->(.*)<!-- end print_continuous_slider_plus_lightbox_func -->/Uis"; 
-            $content = preg_replace_callback($pattern, function($matches) {
-
-
-               $altered = str_replace("<p>","",$matches[1]);
-               $altered = str_replace("</p>","",$altered);
-              
-                $altered=str_replace("&#038;","&",$altered);
-                $altered=str_replace("&#8221;",'"',$altered);
-              
-
-              return @str_replace($matches[1], $altered, $matches[0]);
-            }, $content);
-
-              
-            
-        }
-        
-        $content = str_replace("<p><!-- print_continuous_slider_plus_lightbox_func -->","<!-- print_continuous_slider_plus_lightbox_func -->",$content);
-        $content = str_replace("<!-- end print_continuous_slider_plus_lightbox_func --></p>","<!-- end print_continuous_slider_plus_lightbox_func -->",$content);
-        
-        
-        return $content;
-  }
+    /**
+     * SECURITY FIX (Patchstack-reported, CVSS 7.1 unauthenticated stored XSS):
+     *
+     * This function used to be hooked globally onto 'the_content', 'widget_text_content'
+     * and 'render_block' (see below) and would scan the ENTIRE rendered page output for a
+     * plain-text HTML comment marker, then decode HTML entities (turning already-escaped
+     * characters like &#038; and &#8221; back into raw & and ") inside whatever text it
+     * found between that marker and its closing counterpart.
+     *
+     * Because the marker was just literal text with no secret or nonce tied to it, any
+     * unauthenticated visitor who could get that literal string into content WordPress
+     * runs through these filters (for example, inside a comment) could make this code
+     * "claim" surrounding, unrelated, already-escaped markup on the same page and have it
+     * decoded back to raw characters — breaking WordPress core's own output escaping and
+     * enabling stored XSS that could lead to full site takeover.
+     *
+     * The function and all three global filter registrations have been removed entirely.
+     * Nothing in this plugin now re-scans or rewrites page content it did not itself just
+     * generate in the current shortcode/block render call. Any stray <p> tags a theme's
+     * wpautop may wrap around the shortcode output are harmless, invalid-but-tolerated
+     * HTML that browsers already auto-correct, and are not worth the security risk the
+     * old global rewrite carried.
+     */
 
   function wrthslider_slider_mass_upload_wrthsliderlboxcont(){
         
@@ -2843,19 +2837,6 @@ function cicwl_continuous_slider_plus_lightbox_remove_access_capabilities(){
 
  }
  
-  add_filter('widget_text_content', 'cicwlp_remove_extra_p_tags', 999);
-  add_filter('the_content', 'cicwlp_remove_extra_p_tags', 999);
-
-
-
-
-function i13_cic_modify_render_block_defaults($block_content, $block) { 
-
-    $block_content=cicwlp_remove_extra_p_tags($block_content);
-    return $block_content; 
-
-}
-
-// add the filter
-
-add_filter( 'render_block', 'i13_cic_modify_render_block_defaults', 10, 2 );
+  // The global 'widget_text_content', 'the_content' and 'render_block' filters that used
+  // to call cicwlp_remove_extra_p_tags() here have been removed as part of the security
+  // fix above — see the function's docblock for why.

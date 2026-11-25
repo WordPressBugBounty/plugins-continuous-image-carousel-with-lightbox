@@ -4,8 +4,8 @@ Donate link:http://www.i13websolution.com/donate-wordpress_image_thumbnail.php
 Tags: logo slider,image ticker,carousel,slider,lightbox
 Requires at least: 5.0
 Tested up to: 7.1
-Version: 2.0
-Stable tag: 2.0
+Version: 2.0.1
+Stable tag: 2.0.1
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -93,6 +93,10 @@ Manage images and every setting — including which engine to use — from the *
 This plugin is free for everyone! Since it's released under the GPL, you can use it free of charge on your personal or commercial site. If you find it useful, a donation is always appreciated.
 
 == Changelog ==
+
+= 2.0.1 =
+
+* Security fix: removed a global content filter that could be abused for unauthenticated stored XSS. Everyone running 2.0 or earlier should update immediately.
 
 = 2.0 =
 
